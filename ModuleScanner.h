@@ -1,3 +1,4 @@
+#ifndef _MODULESCANNER_H_
 #pragma once
 
 #include <string>
@@ -31,3 +32,4 @@ inline void* CModuleScanner::FindSignature(const char* pubSignature, const char*
 {
 	return FindSignature((const unsigned char*)pubSignature, cszMask);
 }
+#endif

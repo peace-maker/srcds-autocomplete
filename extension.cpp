@@ -41,8 +41,6 @@
 # include "editline_stripped.h"
 #endif
 
-#pragma comment(lib, "ModuleScanner.lib")
-
 /**
  * @file extension.cpp
  * @brief Implement extension code here.
@@ -50,24 +48,30 @@
 
 static void __stdcall ReceiveTab_Hack(CTextConsole *tc);
 
-#if defined WIN32
+static void Echo(CTextConsole *tc, const char *msg, int numChars = 0);
+
+#ifdef WIN32
+#pragma comment(lib, "ModuleScanner.lib")
 
 // In Orangebox games, the Echo method isn't virtual :(
 #ifdef ORANGEBOX_GAME
+// This combination of game & OS uses the Echo method
+#define USE_ECHO_FUNC
 // CTextConsole::Echo function address
 typedef void (*EchoFunc)(const char *, int);
 EchoFunc g_EchoFunc = nullptr;
 #endif
 
-static void Echo(CTextConsole *tc, const char *msg, int numChars = 0);
-
 // Address inside CTextConsoleWin32::GetLine for '\t' case
 uint8_t *g_pTabCase = nullptr;
 uint8_t g_RestoreBytes[100];
 uint32_t g_RestoreBytesCount;
-#else
+#else // LINUX
 
 #ifndef ORANGEBOX_GAME
+// This combination of game & OS uses the Echo method
+#define USE_ECHO_FUNC
+
 CDetour *receiveTab;
 DETOUR_DECL_MEMBER0(DetourReceiveTab, void)
 {
@@ -86,13 +90,13 @@ el_insertstr_f g_el_insertstr = nullptr;
 CDetour *editlineComplete;
 DETOUR_DECL_STATIC2(DetourEditlineComplete, unsigned char, EditLine *, el, int, ch)
 {
-	static const char s_cmds[][] = { "cvarlist ", "find ", "help ", "maps ", "nextlevel", "quit", "status", "sv_cheats ", "tf_bot_quota ", "toggle ", "sv_dump_edicts" };
-	LineInfo *li = (g_el_line)(el);
+	static const char s_cmds[][32] = { "cvarlist ", "find ", "help ", "maps ", "nextlevel", "quit", "status", "sv_cheats ", "tf_bot_quota ", "toggle ", "sv_dump_edicts" };
+	const LineInfo *li = (g_el_line)(el);
 
-	int len = li->cursor - li->buffer;
-	if (len)
+	if (li->cursor > li->buffer)
 	{
-		for (int i = 0; i < sizeof(s_cmds); i++)
+		unsigned int len = li->cursor - li->buffer;
+		for (unsigned int i = 0; i < sizeof(s_cmds); i++)
 		{
 			if (len <= strlen(s_cmds[i]) && !Q_strncmp(li->buffer, s_cmds[i], len))
 			{
@@ -111,8 +115,6 @@ DETOUR_DECL_STATIC2(DetourEditlineComplete, unsigned char, EditLine *, el, int, 
 #endif // SOURCE_ENGINE != SE_CSGO
 
 #endif // !defined WIN32
-
-
 
 ICvar *icvar = NULL;
 
@@ -289,7 +291,7 @@ bool AutoCompleteHook::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		ke::SafeStrcpy(error, maxlength, "Failed to find el_insertstr symbol in dedicated library");
 		return false;
 	}
-	g_el_inserstr = (el_insertstr_f)el_insertstr;
+	g_el_insertstr = (el_insertstr_f)el_insertstr;
 
 	void *el_line = dedicatedScanner.FindSymbol("el_line");
 	if (!el_line)
@@ -299,7 +301,7 @@ bool AutoCompleteHook::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	}
 	g_el_line = (el_line_f)el_line;
 
-	editlineComplete = DETOUR_CREATE_MEMBER(DetourEditlineComplete, pGetLine);
+	editlineComplete = DETOUR_CREATE_STATIC(DetourEditlineComplete, editline_complete);
 	if (editlineComplete)
 	{
 		editlineComplete->EnableDetour();
@@ -310,14 +312,14 @@ bool AutoCompleteHook::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		return false;
 	}
 #else
-	void *receiveTab = dedicatedScanner.FindSymbol("_ZN12CTextConsole10ReceiveTabEv");
-	if (!receiveTab)
+	void *receiveTabAddr = dedicatedScanner.FindSymbol("_ZN12CTextConsole10ReceiveTabEv");
+	if (!receiveTabAddr)
 	{
 		ke::SafeStrcpy(error, maxlength, "Failed to find CTextConsole::ReceiveTab symbol in dedicated library");
 		return false;
 	}
 
-	receiveTab = DETOUR_CREATE_MEMBER(DetourReceiveTab, receiveTab);
+	receiveTab = DETOUR_CREATE_MEMBER(DetourReceiveTab, receiveTabAddr);
 	if (receiveTab)
 	{
 		receiveTab->EnableDetour();
@@ -419,7 +421,7 @@ static void GetSuggestions(const char *partial, const int numChars, CUtlVector<c
 				if (cmd->IsFlagSet(FCVAR_DEVELOPMENTONLY) || cmd->IsFlagSet(FCVAR_HIDDEN))
 					continue;
 
-				if (!strnicmp(partial, cmd->GetName(), numChars))
+				if (!Q_strnicmp(partial, cmd->GetName(), numChars))
 				{
 					matches.AddToTail(cmd->GetName());
 				}
@@ -445,6 +447,7 @@ static void GetSuggestions(const char *partial, const int numChars, CUtlVector<c
 	}
 }
 
+#if !(defined _LINUX && defined ORANGEBOX_GAME)
 static void __stdcall ReceiveTab_Hack(CTextConsole *tc)
 {
 	tc->m_szConsoleText[tc->m_nConsoleTextLen] = 0;
@@ -532,8 +535,9 @@ static void __stdcall ReceiveTab_Hack(CTextConsole *tc)
 	tc->m_nCursorPosition = tc->m_nConsoleTextLen;
 	tc->m_nBrowseLine = tc->m_nInputLine;
 }
+#endif
 
-#if defined WIN32
+#ifdef USE_ECHO_FUNC
 static void Echo(CTextConsole *tc, const char *msg, int numChars)
 {
 #ifdef ORANGEBOX_GAME

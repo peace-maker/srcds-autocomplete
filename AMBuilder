@@ -9,6 +9,9 @@ sourceFiles = [
   os.path.join(Extension.sm_root, 'public', 'asm', 'asm.c')
 ]
 
+if builder.target_platform == 'linux':
+  sourceFiles += [os.path.join(Extension.sm_root, 'public', 'CDetour', 'detours.cpp')]
+
 ###############
 # Make sure to edit PackageScript, which copies your files to their appropriate locations
 # Simple extensions do not need to modify past this point.
@@ -25,6 +28,8 @@ else:
 project.sources += sourceFiles
   
 for sdk_name in Extension.sdks:
+  if sdk_name == 'episode1':
+    continue
   sdk = Extension.sdks[sdk_name]
   
   binary = Extension.HL2Config(project, projectName + '.ext.' + sdk.ext, sdk)

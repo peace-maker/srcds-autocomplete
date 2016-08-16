@@ -1,10 +1,14 @@
 #ifndef _MODULESCANNER_H_
 #pragma once
 
-#include <string>
-//#include <unordered_map>
-#include <map>
+#include <amtl/am-hashmap.h>
+#include <amtl/am-string.h>
 #include <cstdio>
+
+using namespace ke;
+
+
+
 class CModuleScanner
 {
 public:
@@ -23,9 +27,18 @@ private:
 	const void* m_pAllocationBase;
 	unsigned int m_uSize;
 
-	// Used to be std::unordered_map, but changed to std::map due to new libstdc++ symbols
-	// making the plugin fail to load as Valve's libstdc++ don't have these symbols
-	std::map<std::string, void*> m_symbols;
+	struct StringPolicy
+	{
+		static inline uint32_t hash(const char *key) {
+			return FastHashCharSequence(key, strlen(key));
+		}
+		static inline bool matches(const char *find, const AString &key) {
+			return key.compare(find) == 0;
+		}
+	};
+	typedef HashMap<AString, void *, StringPolicy> SymbolMap;
+
+	SymbolMap m_symbols;
 };
 
 inline void* CModuleScanner::FindSignature(const char* pubSignature, const char* cszMask) const

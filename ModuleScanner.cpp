@@ -3,8 +3,6 @@
  * Find signature patterns and symbols in any loaded module in memory.
  */
 
-#include <string.h>
- 
 #ifdef _WIN32
 	#define WIN32_LEAN_AND_MEAN
 	#include <windows.h>
@@ -27,6 +25,8 @@
 CModuleScanner::CModuleScanner(void* hModule) : m_pAllocationBase(NULL), m_uSize(0)
 {
 	m_szFilename[0] = '\0';
+	if (!m_symbols.init())
+		return;
 
 	if(!hModule)
 		return;
@@ -247,12 +247,21 @@ void CModuleScanner::CacheSymbols()
 		return;
 	}
 
+	const char *pSymName;
+	void *pSymAddr;
 	for(int i = 0; i < nSymbols; i++)
 	{
 		if(!pSymbols[i].st_value)
 			continue;
 
-		m_symbols[pStrings + pSymbols[i].st_name] = (unsigned char*)m_pAllocationBase + pSymbols[i].st_value;
+		pSymName = pStrings + pSymbols[i].st_name;
+		pSymAddr = (unsigned char*)m_pAllocationBase + pSymbols[i].st_value;
+
+		SymbolMap::Insert i = m_symbols.findForAdd(pSymName);
+		if (!i.found())
+			m_symbols.add(i, pSymName, pSymAddr);
+		else
+			i->value = pSymAddr;
 	}
 
 	munmap(pFileBase, uFileSize);
@@ -291,10 +300,8 @@ void* CModuleScanner::FindSignature(const unsigned char* pubSignature, const cha
 
 void* CModuleScanner::FindSymbol(const char* cszSymbol) const
 {
-	std::map<std::string, void*>::const_iterator it = m_symbols.find(cszSymbol);
-
-	if(it != m_symbols.end())
-		return it->second;
-	else
-		return NULL;
+	SymbolMap::Result r = m_symbols.find(cszSymbol);
+	if (!r.found())
+		return nullptr;
+	return r->value;
 }

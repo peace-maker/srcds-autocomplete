@@ -48,15 +48,14 @@
 
 static void __stdcall ReceiveTab_Hack(CTextConsole *tc);
 
-static void Echo(CTextConsole *tc, const char *msg, int numChars = 0);
-
 #ifdef WIN32
 #pragma comment(lib, "ModuleScanner.lib")
 
-// In Orangebox games, the Echo method isn't virtual :(
-#ifdef ORANGEBOX_GAME
 // This combination of game & OS uses the Echo method
 #define USE_ECHO_FUNC
+
+// In Orangebox games, the Echo method isn't virtual :(
+#ifdef ORANGEBOX_GAME
 // CTextConsole::Echo function address
 typedef void (*EchoFunc)(const char *, int);
 EchoFunc g_EchoFunc = nullptr;
@@ -115,6 +114,10 @@ DETOUR_DECL_STATIC2(DetourEditlineComplete, unsigned char, EditLine *, el, int, 
 #endif // SOURCE_ENGINE != SE_CSGO
 
 #endif // !defined WIN32
+
+#ifdef USE_ECHO_FUNC
+static void Echo(CTextConsole *tc, const char *msg, int numChars = 0);
+#endif
 
 ICvar *icvar = NULL;
 

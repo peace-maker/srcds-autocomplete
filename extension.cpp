@@ -459,16 +459,15 @@ static void __stdcall ReceiveTab_Hack(CTextConsole *tc)
 	CUtlVector<const char *> matches;
 	GetSuggestions(tc->m_szConsoleText, tc->m_nConsoleTextLen, matches);
 
+	// No matches. Don't change the input line.
 	if (matches.Count() == 0)
 		return;
 
+	// Exactly one match. Fill in the rest of the command on the command line.
 	if (matches.Count() == 1)
 	{
-		const char * pszCmdName;
-		const char * pszRest;
-
-		pszCmdName = matches[0];
-		pszRest = pszCmdName + strlen(tc->m_szConsoleText);
+		const char * pszCmdName = matches[0];
+		const char * pszRest = pszCmdName + strlen(tc->m_szConsoleText);
 
 		if (pszRest)
 		{
@@ -483,14 +482,9 @@ static void __stdcall ReceiveTab_Hack(CTextConsole *tc)
 	}
 	else
 	{
-		int		nLongestCmd;
-		int		nTotalColumns;
-		int		nCurrentColumn;
-		const char *	pszCurrentCmd;
-
-		nLongestCmd = 0;
-
-		pszCurrentCmd = matches[0];
+		// Find the longest suggestion to print cleanly
+		int nLongestCmd = 0;
+		const char *pszCurrentCmd = matches[0];
 		for (int i = 0; i < matches.Count(); i++)
 		{
 			pszCurrentCmd = matches[i];
@@ -501,18 +495,24 @@ static void __stdcall ReceiveTab_Hack(CTextConsole *tc)
 			}
 		}
 
-		nTotalColumns = (tc->GetWidth() - 1) / (nLongestCmd + 1);
+		// See how many command suggestions fit in one console line considering the console window width.
+		int nTotalColumns = (tc->GetWidth() - 1) / (nLongestCmd + 1);
 		//nTotalColumns = (80 - 1) / (nLongestCmd + 1);
-		nCurrentColumn = 0;
+		int nCurrentColumn = 0;
 
+		// Find the longest common prefix in all the commands
+		char szLongestCommonPrefix[MAX_CONSOLE_TEXTLEN];
+		ke::SafeStrcpy(szLongestCommonPrefix, MAX_CONSOLE_TEXTLEN, matches[0]);
+		int nLongestPrefixLength = strlen(szLongestCommonPrefix);
+
+		// Print all command suggestions as a table in the next line(s)
 		Echo(tc, "\n");
 
+		char szFormatCmd[256];
+		int size, c;
 		for (int i = 0; i < matches.Count(); i++)
 		{
 			pszCurrentCmd = matches[i];
-
-			char szFormatCmd[256];
-
 			nCurrentColumn++;
 
 			if (nCurrentColumn > nTotalColumns)
@@ -521,15 +521,42 @@ static void __stdcall ReceiveTab_Hack(CTextConsole *tc)
 				nCurrentColumn = 1;
 			}
 
+			// Pad the command suggestion to the length of the longest suggestion
 			ke::SafeSprintf(szFormatCmd, sizeof(szFormatCmd), "%-*s ", nLongestCmd, pszCurrentCmd);
 			Echo(tc, szFormatCmd);
+
+			// See if the commands overlap
+			size = strlen(pszCurrentCmd);
+			if (size > nLongestPrefixLength)
+				size = nLongestPrefixLength;
+			c = 0;
+			for (; c < size; c++)
+			{
+				if (pszCurrentCmd[c] != szLongestCommonPrefix[c])
+					break;
+			}
+
+			// New common prefix length
+			nLongestPrefixLength = c;
+			szLongestCommonPrefix[c] = 0;
 		}
 
+		// Tack on 'common' chars in all the matches, i.e. if I typed 'con' and all the
+		// matches begin with 'connect_' then print the matches but also complete the
+		// command up to that point at least.
+		if (nLongestPrefixLength > tc->m_nConsoleTextLen)
+		{
+			const char * pszRest = szLongestCommonPrefix + strlen(tc->m_szConsoleText);
+			if (pszRest)
+			{
+				strncat(tc->m_szConsoleText, pszRest, MAX_CONSOLE_TEXTLEN);
+				tc->m_nConsoleTextLen += strlen(pszRest);
+			}
+		}
+
+		// Provide the entered console text again for further editing.
 		Echo(tc, "\n");
 		Echo(tc, tc->m_szConsoleText);
-		// TODO: Tack on 'common' chars in all the matches, i.e. if I typed 'con' and all the
-		//       matches begin with 'connect_' then print the matches but also complete the
-		//       command up to that point at least.
 	}
 
 	tc->m_nCursorPosition = tc->m_nConsoleTextLen;

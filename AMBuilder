@@ -6,6 +6,7 @@ projectName = 'autocomplete'
 # smsdk_ext.cpp will be automatically added later
 sourceFiles = [
   'extension.cpp',
+  'ModuleScanner.cpp',
   os.path.join(Extension.sm_root, 'public', 'asm', 'asm.c')
 ]
 
@@ -33,14 +34,5 @@ for sdk_name in Extension.sdks:
   sdk = Extension.sdks[sdk_name]
   
   binary = Extension.HL2Config(project, projectName + '.ext.' + sdk.ext, sdk)
-  compiler = binary.compiler
-  
-  if builder.target_platform == 'windows':
-    lib_path = 'lib/ModuleScanner.lib'
-  elif builder.target_platform == 'linux':
-    lib_path = 'lib/ModuleScanner.a'
-  compiler.linkflags.insert(0, binary.Dep(lib_path))
-  
-  
-  
+
 Extension.extensions = builder.Add(project)

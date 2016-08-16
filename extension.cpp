@@ -49,7 +49,6 @@
 static void __stdcall ReceiveTab_Hack(CTextConsole *tc);
 
 #ifdef WIN32
-#pragma comment(lib, "ModuleScanner.lib")
 
 // This combination of game & OS uses the Echo method
 #define USE_ECHO_FUNC

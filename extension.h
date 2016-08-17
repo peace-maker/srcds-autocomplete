@@ -43,6 +43,10 @@
 # define ORANGEBOX_GAME
 #endif
 
+#if defined _LINUX && defined ORANGEBOX_GAME
+# define USE_EDITLINE
+#endif
+
 
 /**
  * @brief Sample implementation of the SDK Extension.

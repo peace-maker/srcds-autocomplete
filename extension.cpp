@@ -37,19 +37,15 @@
 #include <tier0/icommandline.h>
 #include "textconsole.h"
 #include "sourcehook.h"
-#ifndef WIN32
-# include "editline_stripped.h"
-#endif
+#include "editline_stripped.h"
 
 /**
  * @file extension.cpp
  * @brief Implement extension code here.
  */
 
-static void GetSuggestions(const char *partial, const int numChars, CUtlVector<const char *> &matches);
+static int DoAutocompletion(CTextConsole *tc, EditLine *el, const char *consoleText, int consoleTextLen);
 static void __stdcall ReceiveTab_Hack(CTextConsole *tc);
-
-static void Echo(CTextConsole *tc, const char *msg);
 
 #ifdef WIN32
 // In Orangebox games, the Echo method isn't virtual :(
@@ -65,13 +61,7 @@ uint8_t g_RestoreBytes[100];
 uint32_t g_RestoreBytesCount;
 #else // LINUX
 
-#ifndef ORANGEBOX_GAME
-CDetour *receiveTab;
-DETOUR_DECL_MEMBER0(DetourReceiveTab, void)
-{
-	ReceiveTab_Hack((CTextConsole *)this);
-}
-#else
+#ifdef USE_EDITLINE
 // CS:S linux dedicated_srv.so uses libedit/editline for the command prompt..
 
 // Setup function pointers for required editline api helper methods
@@ -101,76 +91,25 @@ DETOUR_DECL_STATIC2(DetourEditlineComplete, unsigned char, EditLine *, el, int, 
 
 	// See if any command matches the partial text
 	// FIXME: This could race with the main thread - but we're not adding/removing ConCommandBases that often, so YOLO
-	CUtlVector<const char *> matches;
-	GetSuggestions(s_consoleText, len, matches);
-
-	if (matches.Count() == 0)
+	int matchCount = DoAutocompletion(console, el, s_consoleText, len);
+	if (matchCount == 0)
 		return CC_ERROR;
 
-	if (matches.Count() == 1)
-	{
-		const char * pszCmdName = matches[0];
-		const char * pszRest = &pszCmdName[len];
+	if (matchCount == 1)
+		return CC_REFRESH;
 
-		if (pszRest)
-		{
-			int inserted = (g_el_insertstr)(el, pszRest);
-			if (inserted == -1)
-				return CC_ERROR;
-
-			inserted = (g_el_insertstr)(el, " ");
-			if (inserted == -1)
-				return CC_ERROR;
-			else
-				return CC_REFRESH;
-		}
-	}
-	else
-	{
-		int nLongestCmd = 0;
-
-		const char *pszCurrentCmd = matches[0];
-		for (int i = 0; i < matches.Count(); i++)
-		{
-			pszCurrentCmd = matches[i];
-
-			if ((int)strlen(pszCurrentCmd) > nLongestCmd)
-			{
-				nLongestCmd = strlen(pszCurrentCmd);
-			}
-		}
-
-		int nTotalColumns = (console->GetWidth() - 1) / (nLongestCmd + 1);
-		//nTotalColumns = (80 - 1) / (nLongestCmd + 1);
-		int nCurrentColumn = 0;
-
-		Echo(console, "\n");
-
-		for (int i = 0; i < matches.Count(); i++)
-		{
-			pszCurrentCmd = matches[i];
-
-			char szFormatCmd[256];
-
-			nCurrentColumn++;
-
-			if (nCurrentColumn > nTotalColumns)
-			{
-				Echo(console, "\n");
-				nCurrentColumn = 1;
-			}
-
-			ke::SafeSprintf(szFormatCmd, sizeof(szFormatCmd), "%-*s ", nLongestCmd, pszCurrentCmd);
-			Echo(console, szFormatCmd);
-		}
-
-		Echo(console, "\n");
+	if (matchCount > 1)
 		return CC_REDISPLAY;
-	}
 
 	return CC_ERROR;
 }
-#endif // SOURCE_ENGINE != SE_CSGO
+#else // !USE_EDITLINE
+CDetour *receiveTab;
+DETOUR_DECL_MEMBER0(DetourReceiveTab, void)
+{
+	ReceiveTab_Hack((CTextConsole *)this);
+}
+#endif // !USE_EDITLINE
 
 #endif // !defined WIN32
 
@@ -344,7 +283,7 @@ bool AutoCompleteHook::SDK_OnLoad(char *error, size_t maxlength, bool late)
 
 	CModuleScanner dedicatedScanner(hDedicated);
 
-#ifdef ORANGEBOX_GAME
+#ifdef USE_EDITLINE
 	void *console_ptr = FindSymbolFromKeyValue(dedicatedScanner, pGameConfig, "console");
 	if (!console_ptr)
 	{
@@ -387,7 +326,7 @@ bool AutoCompleteHook::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		ke::SafeStrcpy(error, maxlength, "Failed to create detour for editline_complete in dedicated library");
 		return false;
 	}
-#else
+#else // !USE_EDITLINE
 	void *receiveTabAddr = FindSymbolFromKeyValue(dedicatedScanner, pGameConfig, "CTextConsole::ReceiveTab");
 	if (!receiveTabAddr)
 	{
@@ -405,10 +344,10 @@ bool AutoCompleteHook::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		ke::SafeStrcpy(error, maxlength, "Failed to create detour for CTextConsole::ReceiveTab in dedicated library");
 		return false;
 	}
-#endif
+#endif // !USE_EDITLINE
 
 	dlclose(hDedicated);
-#endif
+#endif // _LINUX
 
 	gameconfs->CloseGameConfigFile(pGameConfig);
 
@@ -427,13 +366,13 @@ void AutoCompleteHook::SDK_OnUnload()
 		}
 	}
 #else
-#ifdef ORANGEBOX_GAME
+#ifdef USE_EDITLINE
 	if (editlineComplete)
 		editlineComplete->Destroy();
 #else
 	if (receiveTab)
 		receiveTab->Destroy();
-#endif // SOURCE_ENGINE == SE_CSGO
+#endif // !USE_EDITLINE
 #endif // !defined WIN32
 }
 
@@ -523,123 +462,6 @@ static void GetSuggestions(const char *partial, const int numChars, CUtlVector<c
 	}
 }
 
-#if !(defined _LINUX && defined ORANGEBOX_GAME)
-static void __stdcall ReceiveTab_Hack(CTextConsole *tc)
-{
-	tc->m_szConsoleText[tc->m_nConsoleTextLen] = 0;
-
-	if (tc->m_nConsoleTextLen == 0)
-		return;
-
-	// See if any command matches the partial text
-	CUtlVector<const char *> matches;
-	GetSuggestions(tc->m_szConsoleText, tc->m_nConsoleTextLen, matches);
-
-	// No matches. Don't change the input line.
-	if (matches.Count() == 0)
-		return;
-
-	// Exactly one match. Fill in the rest of the command on the command line.
-	if (matches.Count() == 1)
-	{
-		const char * pszCmdName = matches[0];
-		const char * pszRest = pszCmdName + strlen(tc->m_szConsoleText);
-
-		if (pszRest)
-		{
-			Echo(tc, pszRest);
-			strncat(tc->m_szConsoleText, pszRest, MAX_CONSOLE_TEXTLEN);
-			tc->m_nConsoleTextLen += strlen(pszRest);
-
-			Echo(tc, " ");
-			strncat(tc->m_szConsoleText, " ", MAX_CONSOLE_TEXTLEN);
-			tc->m_nConsoleTextLen++;
-		}
-	}
-	else
-	{
-		// Find the longest suggestion to print cleanly
-		int nLongestCmd = 0;
-		const char *pszCurrentCmd = matches[0];
-		for (int i = 0; i < matches.Count(); i++)
-		{
-			pszCurrentCmd = matches[i];
-
-			if ((int)strlen(pszCurrentCmd) > nLongestCmd)
-			{
-				nLongestCmd = strlen(pszCurrentCmd);
-			}
-		}
-
-		// See how many command suggestions fit in one console line considering the console window width.
-		int nTotalColumns = (tc->GetWidth() - 1) / (nLongestCmd + 1);
-		//nTotalColumns = (80 - 1) / (nLongestCmd + 1);
-		int nCurrentColumn = 0;
-
-		// Find the longest common prefix in all the commands
-		char szLongestCommonPrefix[MAX_CONSOLE_TEXTLEN];
-		ke::SafeStrcpy(szLongestCommonPrefix, MAX_CONSOLE_TEXTLEN, matches[0]);
-		int nLongestPrefixLength = strlen(szLongestCommonPrefix);
-
-		// Print all command suggestions as a table in the next line(s)
-		Echo(tc, "\n");
-
-		char szFormatCmd[256];
-		int size, c;
-		for (int i = 0; i < matches.Count(); i++)
-		{
-			pszCurrentCmd = matches[i];
-			nCurrentColumn++;
-
-			if (nCurrentColumn > nTotalColumns)
-			{
-				Echo(tc, "\n");
-				nCurrentColumn = 1;
-			}
-
-			// Pad the command suggestion to the length of the longest suggestion
-			ke::SafeSprintf(szFormatCmd, sizeof(szFormatCmd), "%-*s ", nLongestCmd, pszCurrentCmd);
-			Echo(tc, szFormatCmd);
-
-			// See if the commands overlap
-			size = strlen(pszCurrentCmd);
-			if (size > nLongestPrefixLength)
-				size = nLongestPrefixLength;
-			c = 0;
-			for (; c < size; c++)
-			{
-				if (pszCurrentCmd[c] != szLongestCommonPrefix[c])
-					break;
-			}
-
-			// New common prefix length
-			nLongestPrefixLength = c;
-			szLongestCommonPrefix[c] = 0;
-		}
-
-		// Tack on 'common' chars in all the matches, i.e. if I typed 'con' and all the
-		// matches begin with 'connect_' then print the matches but also complete the
-		// command up to that point at least.
-		if (nLongestPrefixLength > tc->m_nConsoleTextLen)
-		{
-			const char * pszRest = szLongestCommonPrefix + strlen(tc->m_szConsoleText);
-			if (pszRest)
-			{
-				strncat(tc->m_szConsoleText, pszRest, MAX_CONSOLE_TEXTLEN);
-				tc->m_nConsoleTextLen += strlen(pszRest);
-			}
-		}
-
-		// Provide the entered console text again for further editing.
-		Echo(tc, "\n");
-		Echo(tc, tc->m_szConsoleText);
-	}
-
-	tc->m_nCursorPosition = tc->m_nConsoleTextLen;
-	tc->m_nBrowseLine = tc->m_nInputLine;
-}
-#endif
-
 static void Echo(CTextConsole *tc, const char *msg)
 {
 #ifdef ORANGEBOX_GAME
@@ -660,6 +482,147 @@ static void Echo(CTextConsole *tc, const char *msg)
 	tc->Echo(msg);
 #endif
 }
+
+static bool InsertConsoleText(CTextConsole *tc, EditLine *el, const char *msg, bool echo)
+{
+#ifdef USE_EDITLINE
+	int inserted = (g_el_insertstr)(el, msg);
+	return inserted != -1;
+#else
+	if (echo)
+		Echo(tc, msg);
+	strncat(tc->m_szConsoleText, msg, MAX_CONSOLE_TEXTLEN);
+	tc->m_nConsoleTextLen += strlen(msg);
+	return true;
+#endif
+}
+
+static int DoAutocompletion(CTextConsole *tc, EditLine *el, const char *consoleText, int consoleTextLen)
+{
+	// See if any command matches the partial text
+	CUtlVector<const char *> matches;
+	GetSuggestions(consoleText, consoleTextLen, matches);
+
+	// No matches. Don't change the input line.
+	if (matches.Count() == 0)
+		return 0;
+
+	// Exactly one match. Fill in the rest of the command on the command line.
+	if (matches.Count() == 1)
+	{
+		const char * pszCmdName = matches[0];
+		const char * pszRest = &pszCmdName[consoleTextLen];
+
+		if (pszRest)
+		{
+			if (!InsertConsoleText(tc, el, pszRest, true))
+				return 0;
+			if (!InsertConsoleText(tc, el, " ", true))
+				return 0;
+		}
+
+		return 1;
+	}
+	
+	// Find the longest suggestion to print cleanly
+	int nLongestCmd = 0;
+	const char *pszCurrentCmd = matches[0];
+	for (int i = 0; i < matches.Count(); i++)
+	{
+		pszCurrentCmd = matches[i];
+
+		if ((int)strlen(pszCurrentCmd) > nLongestCmd)
+		{
+			nLongestCmd = strlen(pszCurrentCmd);
+		}
+	}
+
+	// See how many command suggestions fit in one console line considering the console window width.
+	int nTotalColumns = (tc->GetWidth() - 1) / (nLongestCmd + 1);
+	//nTotalColumns = (80 - 1) / (nLongestCmd + 1);
+	int nCurrentColumn = 0;
+
+	// Find the longest common prefix in all the commands
+	char szLongestCommonPrefix[MAX_CONSOLE_TEXTLEN];
+	ke::SafeStrcpy(szLongestCommonPrefix, MAX_CONSOLE_TEXTLEN, matches[0]);
+	int nLongestPrefixLength = strlen(szLongestCommonPrefix);
+
+	// Print all command suggestions as a table in the next line(s)
+	Echo(tc, "\n");
+
+	char szFormatCmd[256];
+	int size, c;
+	for (int i = 0; i < matches.Count(); i++)
+	{
+		pszCurrentCmd = matches[i];
+		nCurrentColumn++;
+
+		if (nCurrentColumn > nTotalColumns)
+		{
+			Echo(tc, "\n");
+			nCurrentColumn = 1;
+		}
+
+		// Pad the command suggestion to the length of the longest suggestion
+		ke::SafeSprintf(szFormatCmd, sizeof(szFormatCmd), "%-*s ", nLongestCmd, pszCurrentCmd);
+		Echo(tc, szFormatCmd);
+
+		// See if the commands overlap
+		size = strlen(pszCurrentCmd);
+		if (size > nLongestPrefixLength)
+			size = nLongestPrefixLength;
+		c = 0;
+		for (; c < size; c++)
+		{
+			if (pszCurrentCmd[c] != szLongestCommonPrefix[c])
+				break;
+		}
+
+		// New common prefix length
+		nLongestPrefixLength = c;
+		szLongestCommonPrefix[c] = 0;
+	}
+
+	// Tack on 'common' chars in all the matches, i.e. if I typed 'con' and all the
+	// matches begin with 'connect_' then print the matches but also complete the
+	// command up to that point at least.
+	if (nLongestPrefixLength > consoleTextLen)
+	{
+		const char * pszRest = &szLongestCommonPrefix[consoleTextLen];
+		if (pszRest)
+		{
+			InsertConsoleText(tc, el, pszRest, false);
+		}
+	}
+	
+	return matches.Count();
+}
+
+#ifndef USE_EDITLINE
+static void __stdcall ReceiveTab_Hack(CTextConsole *tc)
+{
+	tc->m_szConsoleText[tc->m_nConsoleTextLen] = 0;
+
+	if (tc->m_nConsoleTextLen == 0)
+		return;
+
+	// Process the autocompletion
+	int matchCount = DoAutocompletion(tc, nullptr, tc->m_szConsoleText, tc->m_nConsoleTextLen);
+	if (matchCount == 0)
+		return;
+
+	// Multiple possible matches shown.
+	if (matchCount > 1)
+	{
+		// Provide the entered console text again for further editing.
+		Echo(tc, "\n");
+		Echo(tc, tc->m_szConsoleText);
+	}
+
+	tc->m_nCursorPosition = tc->m_nConsoleTextLen;
+	tc->m_nBrowseLine = tc->m_nInputLine;
+}
+#endif
 
 // From SM's stringutil.cpp
 size_t UTIL_DecodeHexString(unsigned char *buffer, size_t maxlength, const char *hexstr)

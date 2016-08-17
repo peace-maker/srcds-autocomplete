@@ -46,13 +46,12 @@
  * @brief Implement extension code here.
  */
 
+static void GetSuggestions(const char *partial, const int numChars, CUtlVector<const char *> &matches);
 static void __stdcall ReceiveTab_Hack(CTextConsole *tc);
 
+static void Echo(CTextConsole *tc, const char *msg);
+
 #ifdef WIN32
-
-// This combination of game & OS uses the Echo method
-#define USE_ECHO_FUNC
-
 // In Orangebox games, the Echo method isn't virtual :(
 #ifdef ORANGEBOX_GAME
 // CTextConsole::Echo function address
@@ -67,14 +66,10 @@ uint32_t g_RestoreBytesCount;
 #else // LINUX
 
 #ifndef ORANGEBOX_GAME
-// This combination of game & OS uses the Echo method
-#define USE_ECHO_FUNC
-
 CDetour *receiveTab;
 DETOUR_DECL_MEMBER0(DetourReceiveTab, void)
 {
 	ReceiveTab_Hack((CTextConsole *)this);
-	//DETOUR_MEMBER_CALL(DetourReceiveTab)();
 }
 #else
 // CS:S linux dedicated_srv.so uses libedit/editline for the command prompt..
@@ -85,38 +80,99 @@ typedef int(*el_insertstr_f)(EditLine *, const char *);
 el_line_f g_el_line = nullptr;
 el_insertstr_f g_el_insertstr = nullptr;
 
+static CTextConsole *console = nullptr;
+
 CDetour *editlineComplete;
 DETOUR_DECL_STATIC2(DetourEditlineComplete, unsigned char, EditLine *, el, int, ch)
 {
-	static const char s_cmds[][32] = { "cvarlist ", "find ", "help ", "maps ", "nextlevel", "quit", "status", "sv_cheats ", "tf_bot_quota ", "toggle ", "sv_dump_edicts" };
-	const LineInfo *li = (g_el_line)(el);
+	static char s_consoleText[MAX_CONSOLE_TEXTLEN];
 
-	if (li->cursor > li->buffer)
+	// Get the current's line content
+	const LineInfo *li = (g_el_line)(el);
+	// Empty line
+	if (li->cursor <= li->buffer)
+		return CC_ERROR;
+
+	unsigned int len = li->cursor - li->buffer;
+	if (len > MAX_CONSOLE_TEXTLEN)
+		len = MAX_CONSOLE_TEXTLEN - 1;
+
+	ke::SafeStrcpy(s_consoleText, len + 1, li->buffer);
+
+	// See if any command matches the partial text
+	// FIXME: This could race with the main thread - but we're not adding/removing ConCommandBases that often, so YOLO
+	CUtlVector<const char *> matches;
+	GetSuggestions(s_consoleText, len, matches);
+
+	if (matches.Count() == 0)
+		return CC_ERROR;
+
+	if (matches.Count() == 1)
 	{
-		unsigned int len = li->cursor - li->buffer;
-		for (unsigned int i = 0; i < sizeof(s_cmds); i++)
+		const char * pszCmdName = matches[0];
+		const char * pszRest = &pszCmdName[len];
+
+		if (pszRest)
 		{
-			if (len <= strlen(s_cmds[i]) && !Q_strncmp(li->buffer, s_cmds[i], len))
-			{
-				int inserted = (g_el_insertstr)(el, s_cmds[len]);
-				if (inserted == -1)
-					return CC_ERROR;
-				else
-					return CC_REFRESH;
-			}
+			int inserted = (g_el_insertstr)(el, pszRest);
+			if (inserted == -1)
+				return CC_ERROR;
+
+			inserted = (g_el_insertstr)(el, " ");
+			if (inserted == -1)
+				return CC_ERROR;
+			else
+				return CC_REFRESH;
 		}
 	}
-	return CC_ERROR;
+	else
+	{
+		int nLongestCmd = 0;
 
-	//return DETOUR_STATIC_CALL(DetourEditlineComplete)(el, ch);
+		const char *pszCurrentCmd = matches[0];
+		for (int i = 0; i < matches.Count(); i++)
+		{
+			pszCurrentCmd = matches[i];
+
+			if ((int)strlen(pszCurrentCmd) > nLongestCmd)
+			{
+				nLongestCmd = strlen(pszCurrentCmd);
+			}
+		}
+
+		int nTotalColumns = (console->GetWidth() - 1) / (nLongestCmd + 1);
+		//nTotalColumns = (80 - 1) / (nLongestCmd + 1);
+		int nCurrentColumn = 0;
+
+		Echo(console, "\n");
+
+		for (int i = 0; i < matches.Count(); i++)
+		{
+			pszCurrentCmd = matches[i];
+
+			char szFormatCmd[256];
+
+			nCurrentColumn++;
+
+			if (nCurrentColumn > nTotalColumns)
+			{
+				Echo(console, "\n");
+				nCurrentColumn = 1;
+			}
+
+			ke::SafeSprintf(szFormatCmd, sizeof(szFormatCmd), "%-*s ", nLongestCmd, pszCurrentCmd);
+			Echo(console, szFormatCmd);
+		}
+
+		Echo(console, "\n");
+		return CC_REDISPLAY;
+	}
+
+	return CC_ERROR;
 }
 #endif // SOURCE_ENGINE != SE_CSGO
 
 #endif // !defined WIN32
-
-#ifdef USE_ECHO_FUNC
-static void Echo(CTextConsole *tc, const char *msg, int numChars = 0);
-#endif
 
 ICvar *icvar = NULL;
 
@@ -280,6 +336,14 @@ bool AutoCompleteHook::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	CModuleScanner dedicatedScanner(hDedicated);
 
 #ifdef ORANGEBOX_GAME
+	void *console_ptr = dedicatedScanner.FindSymbol("console");
+	if (!console_ptr)
+	{
+		ke::SafeStrcpy(error, maxlength, "Failed to find console symbol in dedicated library");
+		return false;
+	}
+	console = (CTextConsole *)console_ptr;
+
 	void *editline_complete = dedicatedScanner.FindSymbol("_ZL17editline_completeP8editlinei");
 	if (!editline_complete)
 	{
@@ -566,22 +630,26 @@ static void __stdcall ReceiveTab_Hack(CTextConsole *tc)
 }
 #endif
 
-#ifdef USE_ECHO_FUNC
-static void Echo(CTextConsole *tc, const char *msg, int numChars)
+static void Echo(CTextConsole *tc, const char *msg)
 {
 #ifdef ORANGEBOX_GAME
+# ifdef WIN32
 	__asm
 	{
-		push numChars;
+		push 0; // len
 		push msg;
 		mov ecx, tc;
 		call g_EchoFunc;
 	};
+# else // !WIN32
+	// editline writes to the output stream directly
+	// Don't go through CTextConsoleUnix::Print, because we don't want the suggestions to be added to console.log.
+	fwrite(msg, 1, strlen(msg), tc->m_outputStream);
+# endif // !WIN32
 #else
-	tc->Echo(msg, numChars);
+	tc->Echo(msg);
 #endif
 }
-#endif
 
 // From SM's stringutil.cpp
 size_t UTIL_DecodeHexString(unsigned char *buffer, size_t maxlength, const char *hexstr)

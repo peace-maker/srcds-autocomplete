@@ -25,9 +25,12 @@ public:
 	virtual bool IsVisible() = 0;
 
 public:
+#if defined WIN32 || !defined ORANGEBOX_GAME
+
 #ifdef ORANGEBOX_GAME
 	int		m_Unknown1;
 #endif
+
 	char	m_szConsoleText[MAX_CONSOLE_TEXTLEN];						// console text buffer
 	int		m_nConsoleTextLen;											// console textbuffer length
 	int		m_nCursorPosition;											// position in the current input line
@@ -40,6 +43,12 @@ public:
 	int		m_nInputLine;												// Current line being entered
 	int		m_nBrowseLine;												// current buffer line for up/down arrow
 	int		m_nTotalLines;												// # of nonempty lines in the buffer
+
 	bool	m_ConsoleVisible;
-};
+#else
+	bool	m_ConsoleVisible;
+	bool	m_bConDebug;
+	FILE *	m_outputStream;
 #endif
+};
+#endif // _TEXTCONSOLE_H_

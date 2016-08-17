@@ -77,14 +77,14 @@ CModuleScanner::CModuleScanner(void* hModule) : m_pAllocationBase(NULL), m_uSize
 		char szLine[1024];
 		unsigned long long ullFrom, ullTo, ullOffset;
 		char r, w, x, s;
-		unsigned char uDevMinor, uDevMajor;
+		unsigned int uDevMinor, uDevMajor;
 		unsigned int uINode;
 		unsigned int uModuleINode = 0;
 
 		while(!feof(hFile))
 		{
 			fgets(szLine, sizeof(szLine), hFile);
-			if(sscanf(szLine, "%llx-%llx %c%c%c%c %x %x:%x %u", &ullFrom, &ullTo, &r, &w, &x, &s, &ullOffset, &uDevMinor, &uDevMajor, &uINode) == 10)
+			if(sscanf(szLine, "%llx-%llx %c%c%c%c %llx %x:%x %u", &ullFrom, &ullTo, &r, &w, &x, &s, &ullOffset, &uDevMinor, &uDevMajor, &uINode) == 10)
 			{
 				if(!m_pAllocationBase)
 				{
@@ -257,11 +257,11 @@ void CModuleScanner::CacheSymbols()
 		pSymName = pStrings + pSymbols[i].st_name;
 		pSymAddr = (unsigned char*)m_pAllocationBase + pSymbols[i].st_value;
 
-		SymbolMap::Insert i = m_symbols.findForAdd(pSymName);
-		if (!i.found())
-			m_symbols.add(i, pSymName, pSymAddr);
+		SymbolMap::Insert ins = m_symbols.findForAdd(pSymName);
+		if (!ins.found())
+			m_symbols.add(ins, pSymName, pSymAddr);
 		else
-			i->value = pSymAddr;
+			ins->value = pSymAddr;
 	}
 
 	munmap(pFileBase, uFileSize);
@@ -274,7 +274,7 @@ void CModuleScanner::CacheSymbols()
 
 #endif
 
-void* CModuleScanner::FindSignature(const unsigned char* pubSignature, const char* cszMask) const
+void* CModuleScanner::FindSignature(const unsigned char* pubSignature, const char* cszMask)
 {
 	if(!m_pAllocationBase || !cszMask || !*cszMask)
 		return NULL;
@@ -298,7 +298,7 @@ void* CModuleScanner::FindSignature(const unsigned char* pubSignature, const cha
 	return NULL;
 }
 
-void* CModuleScanner::FindSymbol(const char* cszSymbol) const
+void* CModuleScanner::FindSymbol(const char* cszSymbol)
 {
 	SymbolMap::Result r = m_symbols.find(cszSymbol);
 	if (!r.found())

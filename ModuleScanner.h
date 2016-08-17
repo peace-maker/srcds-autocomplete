@@ -15,10 +15,10 @@ public:
 	// Pass any address in the module or the module handle itself to this function.
 	CModuleScanner(void* hModule);
 
-	void* FindSignature(const char* pubSignature, const char* cszMask) const;
-	void* FindSignature(const unsigned char* pubSignature, const char* cszMask) const;
+	void* FindSignature(const char* pubSignature, const char* cszMask);
+	void* FindSignature(const unsigned char* pubSignature, const char* cszMask);
 
-	void* FindSymbol(const char* cszSymbol) const;
+	void* FindSymbol(const char* cszSymbol);
 
 private:
 	void CacheSymbols();
@@ -41,7 +41,7 @@ private:
 	SymbolMap m_symbols;
 };
 
-inline void* CModuleScanner::FindSignature(const char* pubSignature, const char* cszMask) const
+inline void* CModuleScanner::FindSignature(const char* pubSignature, const char* cszMask)
 {
 	return FindSignature((const unsigned char*)pubSignature, cszMask);
 }

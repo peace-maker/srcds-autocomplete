@@ -26,6 +26,7 @@
 			"CTextConsole::Echo_sig"	"\x55\x8B\xEC\x83\xEC\x08\x53\x8B\xD9\x89\x5D\xFC"
 			
 			// Linux
+			"console"	"console"
 			"editline_complete_sym"	"_ZL17editline_completeP8editlinei"
 			"el_insertstr_sym"	"el_insertstr"
 			"el_line_sym"	"el_line"
@@ -52,7 +53,7 @@
 			"CTextConsoleWin32::GetLine_sig"	"\x55\x8B\xEC\xB8\x20\x50\x00\x00"
 			
 			// Linux
-			"CTextConsoleWin32::GetLine_sym"	"_ZN12CTextConsole10ReceiveTabEv"
+			"CTextConsole::ReceiveTab"	"_ZN12CTextConsole10ReceiveTabEv"
 		}
 	}
 }

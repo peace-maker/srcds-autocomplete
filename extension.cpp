@@ -192,7 +192,7 @@ struct MethodSignatureInfo {
 const MethodSignatureInfo *GetSignatureFromKeyValues(IGameConfig *pGameConfig, const char *key)
 {
 	const char *signature = pGameConfig->GetKeyValue(key);
-	if (!*signature)
+	if (!signature)
 		return nullptr;
 
 	int maskSize = (strlen(signature) + 3) / 4;
@@ -217,6 +217,15 @@ const MethodSignatureInfo *GetSignatureFromKeyValues(IGameConfig *pGameConfig, c
 	info->mask[maskSize] = 0;
 
 	return info;
+}
+
+void *FindSymbolFromKeyValue(CModuleScanner &scanner, IGameConfig *pGameConfig, const char *key)
+{
+	const char *symbol = pGameConfig->GetKeyValue(key);
+	if (!symbol)
+		return nullptr;
+
+	return scanner.FindSymbol(symbol);
 }
 
 bool AutoCompleteHook::SDK_OnMetamodLoad(ISmmAPI *ismm, char *error, size_t maxlen, bool late)
@@ -283,7 +292,7 @@ bool AutoCompleteHook::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	ke::AutoPtr<const MethodSignatureInfo> echoInfo(GetSignatureFromKeyValues(pGameConfig, "CTextConsole::Echo_sig"));
 	if (!echoInfo)
 	{
-		ke::SafeStrcpy(error, maxlength, "Failed to get CTextConsoleWin32::GetLine_sig signature from gamedata.");
+		ke::SafeStrcpy(error, maxlength, "Failed to get CTextConsoleWin32::Echo_sig signature from gamedata.");
 		return false;
 	}
 
@@ -336,7 +345,7 @@ bool AutoCompleteHook::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	CModuleScanner dedicatedScanner(hDedicated);
 
 #ifdef ORANGEBOX_GAME
-	void *console_ptr = dedicatedScanner.FindSymbol("console");
+	void *console_ptr = FindSymbolFromKeyValue(dedicatedScanner, pGameConfig, "console");
 	if (!console_ptr)
 	{
 		ke::SafeStrcpy(error, maxlength, "Failed to find console symbol in dedicated library");
@@ -344,14 +353,15 @@ bool AutoCompleteHook::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	}
 	console = (CTextConsole *)console_ptr;
 
-	void *editline_complete = dedicatedScanner.FindSymbol("_ZL17editline_completeP8editlinei");
+
+	void *editline_complete = FindSymbolFromKeyValue(dedicatedScanner, pGameConfig, "editline_complete");
 	if (!editline_complete)
 	{
 		ke::SafeStrcpy(error, maxlength, "Failed to find editline_complete symbol in dedicated library");
 		return false;
 	}
 
-	void *el_insertstr = dedicatedScanner.FindSymbol("el_insertstr");
+	void *el_insertstr = FindSymbolFromKeyValue(dedicatedScanner, pGameConfig, "el_insertstr");
 	if (!el_insertstr)
 	{
 		ke::SafeStrcpy(error, maxlength, "Failed to find el_insertstr symbol in dedicated library");
@@ -359,7 +369,7 @@ bool AutoCompleteHook::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	}
 	g_el_insertstr = (el_insertstr_f)el_insertstr;
 
-	void *el_line = dedicatedScanner.FindSymbol("el_line");
+	void *el_line = FindSymbolFromKeyValue(dedicatedScanner, pGameConfig, "el_line");
 	if (!el_line)
 	{
 		ke::SafeStrcpy(error, maxlength, "Failed to find el_line symbol in dedicated library");
@@ -378,7 +388,7 @@ bool AutoCompleteHook::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		return false;
 	}
 #else
-	void *receiveTabAddr = dedicatedScanner.FindSymbol("_ZN12CTextConsole10ReceiveTabEv");
+	void *receiveTabAddr = FindSymbolFromKeyValue(dedicatedScanner, pGameConfig, "CTextConsole::ReceiveTab");
 	if (!receiveTabAddr)
 	{
 		ke::SafeStrcpy(error, maxlength, "Failed to find CTextConsole::ReceiveTab symbol in dedicated library");

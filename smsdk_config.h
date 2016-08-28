@@ -39,7 +39,7 @@
 
 /* Basic information exposed publicly */
 #define SMEXT_CONF_NAME			"Console Autocompletion"
-#define SMEXT_CONF_DESCRIPTION	"Add command tab completion to SRCDS windows console"
+#define SMEXT_CONF_DESCRIPTION	"Add command tab completion to SRCDS console"
 #define SMEXT_CONF_VERSION		"1.0"
 #define SMEXT_CONF_AUTHOR		"Peace-Maker"
 #define SMEXT_CONF_URL			"http://www.wcfan.de/"
@@ -64,7 +64,7 @@
 //#define SMEXT_ENABLE_PLAYERHELPERS
 //#define SMEXT_ENABLE_DBMANAGER
 #define SMEXT_ENABLE_GAMECONF
-//#define SMEXT_ENABLE_MEMUTILS
+#define SMEXT_ENABLE_MEMUTILS
 #define SMEXT_ENABLE_GAMEHELPERS
 //#define SMEXT_ENABLE_TIMERSYS
 //#define SMEXT_ENABLE_THREADER

@@ -451,7 +451,7 @@ static void GetSuggestions(const char *partial, const int numChars, CUtlVector<c
 		{
 			for (int j = i + 1; j < matches.Count(); j++)
 			{
-				if (Q_stricmp(matches[i], matches[j]) > 0)
+				if (stricmp(matches[i], matches[j]) > 0)
 				{
 					const char *temp = matches[i];
 					matches[i] = matches[j];
@@ -491,7 +491,8 @@ static bool InsertConsoleText(CTextConsole *tc, EditLine *el, const char *msg, b
 #else
 	if (echo)
 		Echo(tc, msg);
-	strncat(tc->m_szConsoleText, msg, MAX_CONSOLE_TEXTLEN);
+	
+	strncat(tc->m_szConsoleText, msg, MAX_CONSOLE_TEXTLEN - tc->m_nConsoleTextLen);
 	tc->m_nConsoleTextLen += strlen(msg);
 	return true;
 #endif

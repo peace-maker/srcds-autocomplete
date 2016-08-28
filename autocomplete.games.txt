@@ -27,9 +27,9 @@
 			
 			// Linux
 			"console"	"console"
-			"editline_complete_sym"	"_ZL17editline_completeP8editlinei"
-			"el_insertstr_sym"	"el_insertstr"
-			"el_line_sym"	"el_line"
+			"editline_complete"	"_ZL17editline_completeP8editlinei"
+			"el_insertstr"	"el_insertstr"
+			"el_line"	"el_line"
 		}
 	}
 	

@@ -118,41 +118,24 @@ AutoCompleteHook g_AutoCompleteHook;		/**< Global singleton for extension's main
 
 SMEXT_LINK(&g_AutoCompleteHook);
 
-
-
-#define MAX_METHODSIGNATURE_LENGTH 200
-struct MethodSignatureInfo {
-	unsigned char signature[MAX_METHODSIGNATURE_LENGTH];
-	size_t size;
-};
-
-// Have to delete returned ptr
-const MethodSignatureInfo *GetSignatureFromKeyValues(IGameConfig *pGameConfig, const char *key)
+void *GetAddressFromKeyValues(void *pBaseAddr, IGameConfig *pGameConfig, const char *key)
 {
-	const char *signature = pGameConfig->GetKeyValue(key);
-	if (!signature)
+	const char *value = pGameConfig->GetKeyValue(key);
+	if (!value)
 		return nullptr;
 
-	MethodSignatureInfo *info = new MethodSignatureInfo();
-	size_t real_bytes = UTIL_DecodeHexString(info->signature, MAX_METHODSIGNATURE_LENGTH, signature);
+	// Got a symbol here.
+	if (value[0] == '@')
+		return memutils->ResolveSymbol(pBaseAddr, &value[1]);
+
+	// Convert hex signature to byte pattern
+	unsigned char signature[200];
+	size_t real_bytes = UTIL_DecodeHexString(signature, sizeof(signature), value);
 	if (real_bytes < 1)
-	{
-		delete info;
-		return nullptr;
-	}
-
-	info->size = real_bytes;
-
-	return info;
-}
-
-void *FindSymbolFromKeyValue(void *addr, IGameConfig *pGameConfig, const char *key)
-{
-	const char *symbol = pGameConfig->GetKeyValue(key);
-	if (!symbol)
 		return nullptr;
 
-	return memutils->ResolveSymbol(addr, symbol);
+	// Find that pattern in the pointed module.
+	return memutils->FindPattern(pBaseAddr, (char *)signature, real_bytes);
 }
 
 bool AutoCompleteHook::SDK_OnMetamodLoad(ISmmAPI *ismm, char *error, size_t maxlen, bool late)
@@ -196,16 +179,15 @@ bool AutoCompleteHook::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		return false;
 	}
 
-	ke::AutoPtr<const MethodSignatureInfo> getLineInfo(GetSignatureFromKeyValues(pGameConfig, "CTextConsoleWin32::GetLine_sig"));
-	if (!getLineInfo)
+	// Find dedicated.dll module in memory
+	HMODULE hDedicated = GetModuleHandleA("dedicated.dll");
+	if (!hDedicated)
 	{
-		ke::SafeStrcpy(error, maxlength, "Failed to get CTextConsoleWin32::GetLine_sig signature from gamedata.");
+		ke::SafeStrcpy(error, maxlength, "Failed to find dedicated library in memory.");
 		return false;
 	}
 
-	// Find dedicated.dll module in memory
-	HMODULE hDedicated = GetModuleHandleA("dedicated.dll");
-	void *pGetLine = memutils->FindPattern(hDedicated, (char *)getLineInfo->signature, getLineInfo->size);
+	void *pGetLine = GetAddressFromKeyValues(hDedicated, pGameConfig, "CTextConsoleWin32::GetLine_sig");
 	if (!pGetLine)
 	{
 		ke::SafeStrcpy(error, maxlength, "Failed to find CTextConsoleWin32::GetLine signature in dedicated library");
@@ -213,15 +195,8 @@ bool AutoCompleteHook::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	}
 
 #ifdef ORANGEBOX_GAME
-	ke::AutoPtr<const MethodSignatureInfo> echoInfo(GetSignatureFromKeyValues(pGameConfig, "CTextConsole::Echo_sig"));
-	if (!echoInfo)
-	{
-		ke::SafeStrcpy(error, maxlength, "Failed to get CTextConsoleWin32::Echo_sig signature from gamedata.");
-		return false;
-	}
-
 	// In this engine version CTextConsole::Echo isn't virtual :(
-	void *pEcho = memutils->FindPattern(hDedicated, (char *)echoInfo->signature, echoInfo->size);
+	void *pEcho = GetAddressFromKeyValues(hDedicated, pGameConfig, "CTextConsole::Echo_sig");
 	if (!pEcho)
 	{
 		ke::SafeStrcpy(error, maxlength, "Failed to find CTextConsole::Echo signature in dedicated library");
@@ -273,7 +248,7 @@ bool AutoCompleteHook::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	}
 
 #ifdef USE_EDITLINE
-	void *console_ptr = FindSymbolFromKeyValue(hDedicated, pGameConfig, "console");
+	void *console_ptr = GetAddressFromKeyValues(hDedicated, pGameConfig, "console");
 	if (!console_ptr)
 	{
 		dlclose(hDedicated);
@@ -283,7 +258,7 @@ bool AutoCompleteHook::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	console = (CTextConsole *)console_ptr;
 
 
-	void *editline_complete = FindSymbolFromKeyValue(hDedicated, pGameConfig, "editline_complete");
+	void *editline_complete = GetAddressFromKeyValues(hDedicated, pGameConfig, "editline_complete");
 	if (!editline_complete)
 	{
 		dlclose(hDedicated);
@@ -291,7 +266,7 @@ bool AutoCompleteHook::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		return false;
 	}
 
-	void *el_insertstr = FindSymbolFromKeyValue(hDedicated, pGameConfig, "el_insertstr");
+	void *el_insertstr = GetAddressFromKeyValues(hDedicated, pGameConfig, "el_insertstr");
 	if (!el_insertstr)
 	{
 		dlclose(hDedicated);
@@ -300,7 +275,7 @@ bool AutoCompleteHook::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	}
 	g_el_insertstr = (el_insertstr_f)el_insertstr;
 
-	void *el_line = FindSymbolFromKeyValue(hDedicated, pGameConfig, "el_line");
+	void *el_line = GetAddressFromKeyValues(hDedicated, pGameConfig, "el_line");
 	if (!el_line)
 	{
 		dlclose(hDedicated);
@@ -321,7 +296,7 @@ bool AutoCompleteHook::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		return false;
 	}
 #else // !USE_EDITLINE
-	void *receiveTabAddr = FindSymbolFromKeyValue(hDedicated, pGameConfig, "CTextConsole::ReceiveTab");
+	void *receiveTabAddr = GetAddressFromKeyValues(hDedicated, pGameConfig, "CTextConsole::ReceiveTab");
 	if (!receiveTabAddr)
 	{
 		dlclose(hDedicated);

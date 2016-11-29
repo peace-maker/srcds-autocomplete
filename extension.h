@@ -47,6 +47,10 @@
 # define USE_EDITLINE
 #endif
 
+#if SOURCE_ENGINE <= SE_DARKMESSIAH
+# define CVAR_INTERFACE_VERSION VENGINE_CVAR_INTERFACE_VERSION
+#endif
+
 
 /**
  * @brief Sample implementation of the SDK Extension.

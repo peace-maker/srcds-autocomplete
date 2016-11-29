@@ -358,7 +358,21 @@ static ConCommand *FindAutoCompleteCommmandFromPartial(const char *partial)
 		*space = 0;
 	}
 
+#if SOURCE_ENGINE >= SE_ORANGEBOX
 	ConCommand *cmd = icvar->FindCommand(command);
+#else
+	ConCommand *cmd = nullptr;
+	const ConCommandBase *pBase = icvar->GetCommands();
+	while (pBase != nullptr)
+	{
+		if (pBase->IsCommand() && strcmp(pBase->GetName(), command) == 0)
+		{
+			cmd = (ConCommand *)pBase;
+			break;
+		}
+		pBase = pBase->GetNext();
+	}
+#endif
 	if (!cmd)
 		return nullptr;
 
@@ -371,8 +385,12 @@ static ConCommand *FindAutoCompleteCommmandFromPartial(const char *partial)
 static void GetSuggestions(const char *partial, const int numChars, CUtlVector<const char *> &matches)
 {
 	// Need to have this static, so the strings are still valid when added to |matches|
+#if SOURCE_ENGINE >= SE_ORANGEBOX
 	static CUtlVector< CUtlString > commands;
 	commands.Purge();
+#else
+	static char commands[COMMAND_COMPLETION_MAXITEMS][COMMAND_COMPLETION_ITEM_LENGTH];
+#endif
 
 	// Already a space in the command, so try to display command completion suggestions.
 	const char *space = strstr(partial, " ");
@@ -385,7 +403,11 @@ static void GetSuggestions(const char *partial, const int numChars, CUtlVector<c
 		int count = pCommand->AutoCompleteSuggest(partial, commands);
 		for (int i = 0; i < count; i++)
 		{
+#if SOURCE_ENGINE >= SE_ORANGEBOX
 			matches.AddToTail(commands[i].String());
+#else
+			matches.AddToTail(commands[i]);
+#endif
 		}
 	}
 	else
@@ -394,7 +416,7 @@ static void GetSuggestions(const char *partial, const int numChars, CUtlVector<c
 		// Find all commands starting with the text typed in console yet
 		// Scope needed for iterator in CSGO
 		{
-#ifdef ORANGEBOX_GAME
+#if SOURCE_ENGINE < SE_LEFT4DEAD
 			ConCommandBase const *cmd = (ConCommandBase const *)icvar->GetCommands();
 			for (; cmd; cmd = cmd->GetNext())
 			{
@@ -404,7 +426,12 @@ static void GetSuggestions(const char *partial, const int numChars, CUtlVector<c
 			{
 				ConCommandBase *cmd = iter.Get();
 #endif
+
+#if SOURCE_ENGINE <= SE_DARKMESSIAH
+				if (cmd->IsBitSet(FCVAR_LAUNCHER))
+#else
 				if (cmd->IsFlagSet(FCVAR_DEVELOPMENTONLY) || cmd->IsFlagSet(FCVAR_HIDDEN))
+#endif
 					continue;
 
 				if (!Q_strnicmp(partial, cmd->GetName(), numChars))

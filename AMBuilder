@@ -28,10 +28,10 @@ for sdk_name in Extension.sdks:
   if sdk_name == 'episode1':
     continue
   sdk = Extension.sdks[sdk_name]
-
-  if builder.target_platform == 'linux' or sdk_name == 'l4d':
-    project.sources += [os.path.join(Extension.sm_root, 'public', 'CDetour', 'detours.cpp')]
   
   binary = Extension.HL2Config(project, projectName + '.ext.' + sdk.ext, sdk)
+
+  if builder.target_platform == 'linux' or sdk_name == 'l4d' or sdk_name == 'l4d2':
+    binary.sources += [os.path.join(Extension.sm_root, 'public', 'CDetour', 'detours.cpp')]
 
 Extension.extensions = builder.Add(project)

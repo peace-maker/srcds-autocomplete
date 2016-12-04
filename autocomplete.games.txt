@@ -69,4 +69,16 @@
 			"CTextConsole::ReceiveTab_lin"	"@_ZN12CTextConsole10ReceiveTabEv"
 		}
 	}
+	
+	"left4dead2"
+	{
+		"Keys"
+		{
+			// Windows
+			"CTextConsole::ReceiveTab_win"	"\x55\x8B\xEC\x83\xEC\x18\xA1\x2A\x2A\x2A\x2A\x33\xC5"
+			
+			// Linux
+			"CTextConsole::ReceiveTab_lin"	"@_ZN12CTextConsole10ReceiveTabEv"
+		}
+	}
 }

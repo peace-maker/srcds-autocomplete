@@ -22,14 +22,14 @@
 		"Keys"
 		{
 			// Windows
-			"CTextConsoleWin32::GetLine_sig"	"\x55\x8B\xEC\xB8\x20\x50\x00\x00"
-			"CTextConsole::Echo_sig"	"\x55\x8B\xEC\x83\xEC\x08\x53\x8B\xD9\x89\x5D\xFC"
+			"CTextConsole::GetLine_win"	"\x55\x8B\xEC\xB8\x20\x50\x00\x00"
+			"CTextConsole::Echo_win"	"\x55\x8B\xEC\x83\xEC\x08\x53\x8B\xD9\x89\x5D\xFC"
 			
 			// Linux
-			"console"	"@console"
-			"editline_complete"	"@_ZL17editline_completeP8editlinei"
-			"el_insertstr"	"@el_insertstr"
-			"el_line"	"@el_line"
+			"console_lin"	"@console"
+			"editline_complete_lin"	"@_ZL17editline_completeP8editlinei"
+			"el_insertstr_lin"	"@el_insertstr"
+			"el_line_lin"	"@el_line"
 		}
 	}
 	
@@ -50,11 +50,23 @@
 		"Keys"
 		{
 			// Windows
-			"CTextConsoleWin32::GetLine_sig"	"\x55\x8B\xEC\xB8\x20\x50\x00\x00"
+			"CTextConsole::GetLine_win"	"\x55\x8B\xEC\xB8\x20\x50\x00\x00"
 			
 			// Linux
 			// _ZN12CTextConsole10ReceiveTabEv
-			"CTextConsole::ReceiveTab"	"\x55\x89\xE5\x8B\x45\x08\x8B\x90\x04\x01\x00\x00"
+			"CTextConsole::ReceiveTab_lin"	"\x55\x89\xE5\x8B\x45\x08\x8B\x90\x04\x01\x00\x00"
+		}
+	}
+	
+	"left4dead"
+	{
+		"Keys"
+		{
+			// Windows
+			"CTextConsole::ReceiveTab_win"	"\x83\xEC\x14\x8B\x91\x04\x01\x00\x00"
+			
+			// Linux
+			"CTextConsole::ReceiveTab_lin"	"@_ZN12CTextConsole10ReceiveTabEv"
 		}
 	}
 }

@@ -39,7 +39,7 @@
 
 #include "smsdk_ext.h"
 
-#if SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_TF2 || SOURCE_ENGINE == SE_ORANGEBOX
+#if SOURCE_ENGINE == SE_CSS || SOURCE_ENGINE == SE_HL2DM || SOURCE_ENGINE == SE_DODS || SOURCE_ENGINE == SE_TF2
 # define ORANGEBOX_GAME
 #endif
 
@@ -47,8 +47,25 @@
 # define USE_EDITLINE
 #endif
 
+// In left4dead, windows AND linux have a ReceiveTab function.
+#if (defined _LINUX && !defined USE_EDITLINE) || SOURCE_ENGINE == SE_LEFT4DEAD
+# define DETOUR_RECEIVE_TAB
+#endif
+
+// MSVC optimized the ReceiveTab function away. It's still present in L4D though!
+#if defined WIN32 && SOURCE_ENGINE != SE_LEFT4DEAD
+# define TAB_SWITCH_CASE_HACK
+#endif
+
 #if SOURCE_ENGINE <= SE_DARKMESSIAH
 # define CVAR_INTERFACE_VERSION VENGINE_CVAR_INTERFACE_VERSION
+#endif
+
+// Keyvalues in gamedata aren't specific to the platform, so we have to distinguish manually.
+#ifdef WIN32
+# define KEY_SUFFIX "_win"
+#else
+# define KEY_SUFFIX "_lin"
 #endif
 
 

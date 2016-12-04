@@ -40,7 +40,7 @@
 /* Basic information exposed publicly */
 #define SMEXT_CONF_NAME			"Console Autocompletion"
 #define SMEXT_CONF_DESCRIPTION	"Add command tab completion to SRCDS console"
-#define SMEXT_CONF_VERSION		"1.0"
+#define SMEXT_CONF_VERSION		"1.0.1"
 #define SMEXT_CONF_AUTHOR		"Peace-Maker"
 #define SMEXT_CONF_URL			"http://www.wcfan.de/"
 #define SMEXT_CONF_LOGTAG		"AutoComplete"

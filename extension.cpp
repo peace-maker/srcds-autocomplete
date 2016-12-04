@@ -44,21 +44,23 @@
  */
 
 static int DoAutocompletion(CTextConsole *tc, EditLine *el, const char *consoleText, int consoleTextLen);
+#ifndef USE_EDITLINE
 static void __stdcall ReceiveTab_Hack(CTextConsole *tc);
+#endif
 
-#ifdef WIN32
+#if defined WIN32 && defined ORANGEBOX_GAME
 // In Orangebox games, the Echo method isn't virtual :(
-#ifdef ORANGEBOX_GAME
 // CTextConsole::Echo function address
 typedef void (*EchoFunc)(const char *, int);
 EchoFunc g_EchoFunc = nullptr;
-#endif
+#endif // WIN32 && ORANGEBOX_GAME
 
+#ifdef TAB_SWITCH_CASE_HACK
 // Address inside CTextConsoleWin32::GetLine for '\t' case
 uint8_t *g_pTabCase = nullptr;
 uint8_t g_RestoreBytes[100];
 uint32_t g_RestoreBytesCount;
-#else // LINUX
+#endif // TAB_SWITCH_CASE_HACK
 
 #ifdef USE_EDITLINE
 // CS:S linux dedicated_srv.so uses libedit/editline for the command prompt..
@@ -102,15 +104,15 @@ DETOUR_DECL_STATIC2(DetourEditlineComplete, unsigned char, EditLine *, el, int, 
 
 	return CC_ERROR;
 }
-#else // !USE_EDITLINE
+#endif
+
+#ifdef DETOUR_RECEIVE_TAB
 CDetour *receiveTab;
 DETOUR_DECL_MEMBER0(DetourReceiveTab, void)
 {
 	ReceiveTab_Hack((CTextConsole *)this);
 }
-#endif // !USE_EDITLINE
-
-#endif // !defined WIN32
+#endif // _LINUX || L4D
 
 ICvar *icvar = NULL;
 
@@ -154,12 +156,42 @@ bool AutoCompleteHook::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		return false;
 	}
 
+	// Find dedicated library in memory.
 #ifdef WIN32
 	// The Windows SRCDS GUI already has its own auto completion feature.
 	ICommandLine *commandline = gamehelpers->GetValveCommandLine();
 	if (commandline && !commandline->FindParm("-console"))
 	{
 		ke::SafeStrcpy(error, maxlength, "This extension is only needed when running in -console mode.");
+		return false;
+	}
+
+	// Find dedicated.dll module in memory
+	HMODULE hDedicated = GetModuleHandleA("dedicated.dll");
+	if (!hDedicated)
+	{
+		ke::SafeStrcpy(error, maxlength, "Failed to find dedicated library in memory.");
+		return false;
+	}
+#else // WIN32
+	void* hDedicated = dlopen("dedicated_srv.so", RTLD_LAZY);
+	if (!hDedicated)
+		hDedicated = dlopen("dedicated.so", RTLD_LAZY);
+
+	if (!hDedicated)
+	{
+		ke::SafeStrcpy(error, maxlength, "Failed to find dedicated library in memory.");
+		return false;
+	}
+#endif
+	
+	// MSVC optimized the ReceiveTab function away. It's still present in L4D though!
+#ifdef TAB_SWITCH_CASE_HACK
+	// Find GetLine function, which handles the console input
+	void *pGetLine = GetAddressFromKeyValues(hDedicated, pGameConfig, "CTextConsole::GetLine" KEY_SUFFIX);
+	if (!pGetLine)
+	{
+		ke::SafeStrcpy(error, maxlength, "Failed to find CTextConsoleWin32::GetLine signature in dedicated library");
 		return false;
 	}
 
@@ -179,24 +211,9 @@ bool AutoCompleteHook::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		return false;
 	}
 
-	// Find dedicated.dll module in memory
-	HMODULE hDedicated = GetModuleHandleA("dedicated.dll");
-	if (!hDedicated)
-	{
-		ke::SafeStrcpy(error, maxlength, "Failed to find dedicated library in memory.");
-		return false;
-	}
-
-	void *pGetLine = GetAddressFromKeyValues(hDedicated, pGameConfig, "CTextConsoleWin32::GetLine_sig");
-	if (!pGetLine)
-	{
-		ke::SafeStrcpy(error, maxlength, "Failed to find CTextConsoleWin32::GetLine signature in dedicated library");
-		return false;
-	}
-
 #ifdef ORANGEBOX_GAME
 	// In this engine version CTextConsole::Echo isn't virtual :(
-	void *pEcho = GetAddressFromKeyValues(hDedicated, pGameConfig, "CTextConsole::Echo_sig");
+	void *pEcho = GetAddressFromKeyValues(hDedicated, pGameConfig, "CTextConsole::Echo" KEY_SUFFIX);
 	if (!pEcho)
 	{
 		ke::SafeStrcpy(error, maxlength, "Failed to find CTextConsole::Echo signature in dedicated library");
@@ -234,21 +251,14 @@ bool AutoCompleteHook::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	
 	// nop the rest of the case handler
 	fill_nop(pTabCase, patchSize);
-#else
-	CDetourManager::Init(smutils->GetScriptingEngine(), nullptr);
-
-	void* hDedicated = dlopen("dedicated_srv.so", RTLD_LAZY);
-	if (!hDedicated)
-		hDedicated = dlopen("dedicated.so", RTLD_LAZY);
-
-	if (!hDedicated)
-	{
-		ke::SafeStrcpy(error, maxlength, "Failed to find dedicated library in memory.");
-		return false;
-	}
+#endif
+	
 
 #ifdef USE_EDITLINE
-	void *console_ptr = GetAddressFromKeyValues(hDedicated, pGameConfig, "console");
+	// dedicated_srv.so in orangebox games use ncurses/editline to handle the command line.
+	CDetourManager::Init(smutils->GetScriptingEngine(), nullptr);
+
+	void *console_ptr = GetAddressFromKeyValues(hDedicated, pGameConfig, "console" KEY_SUFFIX);
 	if (!console_ptr)
 	{
 		dlclose(hDedicated);
@@ -258,7 +268,7 @@ bool AutoCompleteHook::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	console = (CTextConsole *)console_ptr;
 
 
-	void *editline_complete = GetAddressFromKeyValues(hDedicated, pGameConfig, "editline_complete");
+	void *editline_complete = GetAddressFromKeyValues(hDedicated, pGameConfig, "editline_complete" KEY_SUFFIX);
 	if (!editline_complete)
 	{
 		dlclose(hDedicated);
@@ -266,7 +276,7 @@ bool AutoCompleteHook::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		return false;
 	}
 
-	void *el_insertstr = GetAddressFromKeyValues(hDedicated, pGameConfig, "el_insertstr");
+	void *el_insertstr = GetAddressFromKeyValues(hDedicated, pGameConfig, "el_insertstr" KEY_SUFFIX);
 	if (!el_insertstr)
 	{
 		dlclose(hDedicated);
@@ -275,7 +285,7 @@ bool AutoCompleteHook::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	}
 	g_el_insertstr = (el_insertstr_f)el_insertstr;
 
-	void *el_line = GetAddressFromKeyValues(hDedicated, pGameConfig, "el_line");
+	void *el_line = GetAddressFromKeyValues(hDedicated, pGameConfig, "el_line" KEY_SUFFIX);
 	if (!el_line)
 	{
 		dlclose(hDedicated);
@@ -295,11 +305,17 @@ bool AutoCompleteHook::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		ke::SafeStrcpy(error, maxlength, "Failed to create detour for editline_complete in dedicated library");
 		return false;
 	}
-#else // !USE_EDITLINE
-	void *receiveTabAddr = GetAddressFromKeyValues(hDedicated, pGameConfig, "CTextConsole::ReceiveTab");
+#endif
+
+#ifdef DETOUR_RECEIVE_TAB
+	CDetourManager::Init(smutils->GetScriptingEngine(), nullptr);
+
+	void *receiveTabAddr = GetAddressFromKeyValues(hDedicated, pGameConfig, "CTextConsole::ReceiveTab" KEY_SUFFIX);
 	if (!receiveTabAddr)
 	{
+#ifdef _LINUX
 		dlclose(hDedicated);
+#endif // _LINUX
 		ke::SafeStrcpy(error, maxlength, "Failed to find CTextConsole::ReceiveTab symbol in dedicated library");
 		return false;
 	}
@@ -311,12 +327,15 @@ bool AutoCompleteHook::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	}
 	else
 	{
+#ifdef _LINUX
 		dlclose(hDedicated);
+#endif // _LINUX
 		ke::SafeStrcpy(error, maxlength, "Failed to create detour for CTextConsole::ReceiveTab in dedicated library");
 		return false;
 	}
-#endif // !USE_EDITLINE
+#endif // DETOUR_RECEIVE_TAB
 
+#ifdef _LINUX
 	dlclose(hDedicated);
 #endif // _LINUX
 
@@ -327,7 +346,7 @@ bool AutoCompleteHook::SDK_OnLoad(char *error, size_t maxlength, bool late)
 
 void AutoCompleteHook::SDK_OnUnload()
 {
-#if defined WIN32
+#ifdef TAB_SWITCH_CASE_HACK
 	// Restore patched opcodes..
 	if (g_pTabCase)
 	{
@@ -336,15 +355,17 @@ void AutoCompleteHook::SDK_OnUnload()
 			g_pTabCase[i] = g_RestoreBytes[i];
 		}
 	}
-#else
+#endif
+
 #ifdef USE_EDITLINE
 	if (editlineComplete)
 		editlineComplete->Destroy();
-#else
+#endif // USE_EDITLINE
+
+#ifdef DETOUR_RECEIVE_TAB
 	if (receiveTab)
 		receiveTab->Destroy();
-#endif // !USE_EDITLINE
-#endif // !defined WIN32
+#endif // DETOUR_RECEIVE_TAB
 }
 
 static ConCommand *FindAutoCompleteCommmandFromPartial(const char *partial)

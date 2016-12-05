@@ -261,9 +261,23 @@ bool AutoCompleteHook::SDK_OnLoad(char *error, size_t maxlength, bool late)
 	void *console_ptr = GetAddressFromKeyValues(hDedicated, pGameConfig, "console" KEY_SUFFIX);
 	if (!console_ptr)
 	{
-		dlclose(hDedicated);
-		ke::SafeStrcpy(error, maxlength, "Failed to find console symbol in dedicated library");
-		return false;
+		console_ptr = GetAddressFromKeyValues(hDedicated, pGameConfig, "console_ptr" KEY_SUFFIX);
+		if (!console_ptr)
+		{
+			dlclose(hDedicated);
+			ke::SafeStrcpy(error, maxlength, "Failed to find console symbol in dedicated library");
+			return false;
+		}
+
+		int consoleOffset;
+		if (!pGameConfig->GetOffset("ConsolePtrOffset", &consoleOffset))
+		{
+			dlclose(hDedicated);
+			ke::SafeStrcpy(error, maxlength, "Failed to get ConsolePtrOffset offset from gamedata.");
+			return false;
+		}
+
+		console_ptr = *(reinterpret_cast<void**>(reinterpret_cast<uint8_t*>(console_ptr) + consoleOffset));
 	}
 	console = (CTextConsole *)console_ptr;
 

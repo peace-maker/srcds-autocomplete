@@ -138,4 +138,46 @@
 			"CTextConsole::ReceiveTab_lin"	"@_ZN12CTextConsole10ReceiveTabEv"
 		}
 	}
+	
+	"#default"
+	{
+		"#supported"
+		{
+			"engine" "sdk2013"
+		}
+		
+		"Offsets"
+		{
+			"TabCompleteSwitchCase"
+			{
+				"windows"	"313"
+			}
+			"TabCompletePatchSize"
+			{
+				"windows"	"36"
+			}
+			
+			"ConsolePtrOffset"
+			{
+				"linux"	"9"
+			}
+		}
+		
+		"Keys"
+		{
+			// Windows
+			"CTextConsole::GetLine_win"	"\x55\x8B\xEC\xB8\x20\x50\x00\x00"
+			"CTextConsole::Echo_win"	"\x55\x8B\xEC\x83\xEC\x08\x53\x8B\xD9\x89\x5D\xFC"
+			
+			// Linux
+			// console ptr in CDedicatedAppSystemGroup::Create
+			"console_ptr_lin"	"\x55\x89\xE5\x83\xEC\x18\xC7\x04\x24\x2A\x2A\x2A\x2A\x89\x5D\xF8"
+			// _ZL17editline_completeP8editlinei
+			"editline_complete_lin"	"\x55\x89\xE5\x57\x56\x53\x83\xEC\x2C\x8B\x55\x08\x89\x14\x24"
+			// el_insertstr
+			"el_insertstr_lin"	"\x57\x56\x53\x83\xEC\x10\x8B\x5C\x24\x24"
+			// el_line
+			"el_line_lin"	"\x8B\x44\x24\x04\x83\xC0\x38"
+		}
+	}
 }

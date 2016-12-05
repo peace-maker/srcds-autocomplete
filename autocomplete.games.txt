@@ -93,4 +93,32 @@
 			"CTextConsole::ReceiveTab_lin"	"@_ZN12CTextConsole10ReceiveTabEv"
 		}
 	}
+	
+	"bms"
+	{
+		"Offsets"
+		{
+			"TabCompleteSwitchCase"
+			{
+				"windows"	"380"
+			}
+			"TabCompletePatchSize"
+			{
+				"windows"	"72"
+			}
+		}
+		
+		"Keys"
+		{
+			// Windows
+			"CTextConsole::GetLine_win"	"\x55\x8B\xEC\xB8\x2C\x50\x00\x00"
+			"CTextConsole::Echo_win"	"\x55\x8B\xEC\x83\xEC\x08\x53\x8B\xD9\x89\x5D\xFC"
+			
+			// Linux
+			"console_lin"	"@console"
+			"editline_complete_lin"	"@_ZL17editline_completeP8editlinei"
+			"el_insertstr_lin"	"@el_insertstr"
+			"el_line_lin"	"@el_line"
+		}
+	}
 }

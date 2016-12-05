@@ -121,4 +121,21 @@
 			"el_line_lin"	"@el_line"
 		}
 	}
+	
+	"#default"
+	{
+		"#supported"
+		{
+			"engine" "insurgency"
+		}
+		
+		"Keys"
+		{
+			// Windows
+			"CTextConsole::ReceiveTab_win"	"\x8B\x81\x04\x01\x00\x00"
+			
+			// Linux
+			"CTextConsole::ReceiveTab_lin"	"@_ZN12CTextConsole10ReceiveTabEv"
+		}
+	}
 }

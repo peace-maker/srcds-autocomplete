@@ -9,6 +9,8 @@ sourceFiles = [
   os.path.join(Extension.sm_root, 'public', 'asm', 'asm.c')
 ]
 
+detour_games = ['l4d', 'l4d2', 'nucleardawn']
+
 ###############
 # Make sure to edit PackageScript, which copies your files to their appropriate locations
 # Simple extensions do not need to modify past this point.
@@ -31,7 +33,7 @@ for sdk_name in Extension.sdks:
   
   binary = Extension.HL2Config(project, projectName + '.ext.' + sdk.ext, sdk)
 
-  if builder.target_platform == 'linux' or sdk_name == 'l4d' or sdk_name == 'l4d2':
+  if builder.target_platform == 'linux' or sdk_name in detour_games:
     binary.sources += [os.path.join(Extension.sm_root, 'public', 'CDetour', 'detours.cpp')]
 
 Extension.extensions = builder.Add(project)

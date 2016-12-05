@@ -48,12 +48,12 @@
 #endif
 
 // In left4dead(2), windows AND linux have a ReceiveTab function.
-#if (defined _LINUX && !defined USE_EDITLINE) || SOURCE_ENGINE == SE_LEFT4DEAD || SOURCE_ENGINE == SE_LEFT4DEAD2
+#if (defined _LINUX && !defined USE_EDITLINE) || SOURCE_ENGINE == SE_LEFT4DEAD || SOURCE_ENGINE == SE_LEFT4DEAD2 || SOURCE_ENGINE == SE_NUCLEARDAWN
 # define DETOUR_RECEIVE_TAB
 #endif
 
 // MSVC optimized the ReceiveTab function away. It's still present in L4D(2) though!
-#if defined WIN32 && SOURCE_ENGINE != SE_LEFT4DEAD && SOURCE_ENGINE != SE_LEFT4DEAD2
+#if defined WIN32 && SOURCE_ENGINE != SE_LEFT4DEAD && SOURCE_ENGINE != SE_LEFT4DEAD2 && SOURCE_ENGINE != SE_NUCLEARDAWN
 # define TAB_SWITCH_CASE_HACK
 #endif
 

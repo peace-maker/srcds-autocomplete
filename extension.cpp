@@ -38,6 +38,10 @@
 #include "sourcehook.h"
 #include "editline_stripped.h"
 
+#ifdef _LINUX
+#include <link.h>
+#endif
+
 /**
  * @file extension.cpp
  * @brief Implement extension code here.
@@ -135,6 +139,12 @@ void *GetAddressFromKeyValues(void *pBaseAddr, IGameConfig *pGameConfig, const c
 	size_t real_bytes = UTIL_DecodeHexString(signature, sizeof(signature), value);
 	if (real_bytes < 1)
 		return nullptr;
+
+#ifdef _LINUX
+	// The pointer returned by dlopen is not inside the loaded librarys memory region.
+	struct link_map *dlmap = (struct link_map *)pBaseAddr;
+	pBaseAddr = (void *)dlmap->l_addr;
+#endif
 
 	// Find that pattern in the pointed module.
 	return memutils->FindPattern(pBaseAddr, (char *)signature, real_bytes);

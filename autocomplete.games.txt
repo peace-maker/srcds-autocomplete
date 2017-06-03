@@ -39,11 +39,11 @@
 		{
 			"TabCompleteSwitchCase"
 			{
-				"windows"	"338"
+				"windows"	"340"
 			}
 			"TabCompletePatchSize"
 			{
-				"windows"	"34"
+				"windows"	"33"
 			}
 		}
 		

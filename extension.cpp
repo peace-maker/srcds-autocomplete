@@ -220,6 +220,13 @@ bool AutoCompleteHook::SDK_OnLoad(char *error, size_t maxlength, bool late)
 		ke::SafeStrcpy(error, maxlength, "Failed to get TabCompletePatchSize offset from gamedata.");
 		return false;
 	}
+	
+	// Make sure our buffer is large enough.
+	if (sizeof(g_RestoreBytes) < patchSize)
+	{
+		ke::SafeSprintf(error, maxlength, "TabCompletePatchSize is too big. (%d > %d)", patchSize, sizeof(g_RestoreBytes));
+		return false;
+	}
 
 #ifdef ORANGEBOX_GAME
 	// In this engine version CTextConsole::Echo isn't virtual :(

@@ -25,7 +25,9 @@ else:
   project.sources += [os.path.join(Extension.sm_root, 'public', 'smsdk_ext.cpp')]
 
 project.sources += sourceFiles
-  
+
+project.compiler.defines += ['HAVE_STRING_H']
+
 for sdk_name in Extension.sdks:
   if sdk_name == 'episode1':
     continue
@@ -35,5 +37,16 @@ for sdk_name in Extension.sdks:
 
   if builder.target_platform == 'linux' or sdk_name in detour_games:
     binary.sources += [os.path.join(Extension.sm_root, 'public', 'CDetour', 'detours.cpp')]
+
+    # SM 1.10+ compilation changes
+    if os.path.isfile(os.path.join(Extension.sm_root, 'public', 'libudis86', 'decode.c')):
+      binary.sources += [
+        os.path.join(Extension.sm_root, 'public', 'libudis86', 'decode.c'),
+        os.path.join(Extension.sm_root, 'public', 'libudis86', 'itab.c'),
+        os.path.join(Extension.sm_root, 'public', 'libudis86', 'syn-att.c'),
+        os.path.join(Extension.sm_root, 'public', 'libudis86', 'syn-intel.c'),
+        os.path.join(Extension.sm_root, 'public', 'libudis86', 'syn.c'),
+        os.path.join(Extension.sm_root, 'public', 'libudis86', 'udis86.c')
+      ]
 
 Extension.extensions = builder.Add(project)
